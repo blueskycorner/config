@@ -1,0 +1,111 @@
+service: BaseConfig # NOTE: update this with your service name
+
+# You can pin your service to only deploy with a specific Serverless version
+# Check out our docs for more details
+# frameworkVersion: "=X.X.X"
+
+provider:
+  name: aws
+  region: us-east-1
+  runtime: python3.7
+  profile: hardis
+  stage: ${opt:stage, 'dev'}
+  stackTags:
+    Application: config-test
+  tags:
+    Application: config-test
+
+custom:
+  delivery-bucket-name: config-test-beh
+  delivery-topic-email: benjamin.ehlers@hardis.fr
+
+# functions:
+#   hello:
+#     handler: handler.hello
+
+resources:
+  Resources:
+    ConfigRecorder:
+      Type: AWS::Config::ConfigurationRecorder
+      Properties: 
+        Name: default
+        RecordingGroup: 
+          ResourceTypes:
+          - AWS::EC2::SecurityGroup
+        RoleARN: !GetAtt ConfigRole.Arn
+
+    ConfigDeliveryChannel:
+      # DependsOn: ConfigRecorder
+      Type: AWS::Config::DeliveryChannel
+      Properties: 
+        ConfigSnapshotDeliveryProperties: 
+          DeliveryFrequency: One_Hour
+        # Name: ${self:service}
+        S3BucketName: !Ref ConfigDeliveryBucket
+        SnsTopicARN: !Ref ConfigDeliveryTopic
+
+    ConfigDeliveryBucket:
+      Type: AWS::S3::Bucket
+      DeletionPolicy: Retain
+      Properties: 
+        AccessControl: Private
+        BucketName: ${self:custom.delivery-bucket-name}
+
+    ConfigDeliveryTopic:
+      Type: AWS::SNS::Topic
+      Properties: 
+        DisplayName: ${self:service}
+        Subscription: 
+        - Endpoint: ${self:custom.delivery-topic-email}
+          Protocol: email
+        TopicName: ${self:service}
+
+    ConfigRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: ${self:service}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - config.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSConfigRole
+        Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action: s3:GetBucketAcl
+              Resource: !Join ['', ['arn:aws:s3:::', !Ref 'ConfigDeliveryBucket']]
+            - Effect: Allow
+              Action: s3:PutObject
+              Resource: !Join ['', ['arn:aws:s3:::', !Ref 'ConfigDeliveryBucket', /AWSLogs/,
+                  !Ref 'AWS::AccountId', /*]]
+              Condition:
+                StringEquals:
+                  s3:x-amz-acl: bucket-owner-full-control
+            - Effect: Allow
+              Action: config:Put*
+              Resource: '*'
+
+    IncomingSshDisabledConfigRule:
+      DependsOn: ConfigRecorder
+      Type: AWS::Config::ConfigRule
+      Properties:
+        ConfigRuleName: ${self:provider.stage}-rules-check-incoming-ssh-disabled
+        Source:
+          Owner: AWS
+          SourceIdentifier: INCOMING_SSH_DISABLED
+        Description: 'CIS 4.1: Ensure no security groups allow ingress from 0.0.0.0/0 to port 22'
+        Scope:
+          ComplianceResourceTypes:
+          - AWS::EC2::SecurityGroup
+#  Outputs:
+#     NewOutput:
+#       Description: "Description for the output"
+#       Value: "Some output value"
