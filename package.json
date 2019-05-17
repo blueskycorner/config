@@ -6,7 +6,7 @@
   "config": {
     "region": "us-east-1",
     "profile": "hardis",
-    "configName": "BaseConfig",
+    "configName": "default",
     "deliveryChannelName": "default",
     "end": "--region us-east-1 --profile hardis"
   },
@@ -15,8 +15,8 @@
     "list-dc": "aws configservice describe-delivery-channels %npm_package_config_end%",
     "del-rec": "aws configservice delete-configuration-recorder --configuration-recorder-name %npm_package_config_configName% %npm_package_config_end%",
     "del-dc": "aws configservice delete-delivery-channel --delivery-channel-name  %npm_package_config_deliveryChannelName% %npm_package_config_end%",
-    "start-recording": "aws start-configuration-recorder --configuration-recorder-name %npm_package_config_configName% %npm_package_config_end%",
-    "stop-recording": "aws stop-configuration-recorder --configuration-recorder-name %npm_package_config_configName% %npm_package_config_end%"
+    "start-recording": "aws configservice start-configuration-recorder --configuration-recorder-name %npm_package_config_configName% %npm_package_config_end%",
+    "stop-recording": "aws configservice stop-configuration-recorder --configuration-recorder-name %npm_package_config_configName% %npm_package_config_end%"
   },
   "repository": {
     "type": "git",
@@ -27,5 +27,8 @@
   "bugs": {
     "url": "https://github.com/blueskycorner/config/issues"
   },
-  "homepage": "https://github.com/blueskycorner/config#readme"
+  "homepage": "https://github.com/blueskycorner/config#readme",
+  "devDependencies": {
+    "serverless-plugin-existing-s3": "^2.4.0"
+  }
 }

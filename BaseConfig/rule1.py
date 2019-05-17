@@ -33,18 +33,25 @@ def lambda_handler(event, context):
     if "resultToken" in event:
         result_token = event["resultToken"]
 
+    compliance_status = "NOT_APPLICABLE"
+
+    if "eventLeftScope" in event and event["eventLeftScope"] == False:
+        compliance_status = evaluate_compliance(configuration_item, rule_parameters["ipAddress"])
+
+    
     evaluation = {
         "ComplianceResourceType":
             configuration_item["resourceType"],
         "ComplianceResourceId":
             configuration_item["resourceId"],
         "ComplianceType":
-            evaluate_compliance(configuration_item, rule_parameters["ipAddress"]),
+            compliance_status,
         "Annotation":
             "SSH Access is allowed to not allowed IP addess range",
         "OrderingTimestamp":
             configuration_item["configurationItemCaptureTime"]
     }
+
     if "dryRun" not in event:
         config.put_evaluations(
             Evaluations=[evaluation],

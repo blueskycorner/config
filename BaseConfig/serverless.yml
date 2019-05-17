@@ -15,15 +15,35 @@ provider:
   tags:
     Application: config-test
 
+plugins:
+  - serverless-plugin-existing-s3
+
 custom:
   delivery-bucket-name: config-test-beh
   delivery-topic-email: benjamin.ehlers@hardis.fr
+  database-name: config_snapshot
+  table-name: config_snapshot
 
 functions:
   rule1:
     handler: rule1.lambda_handler
-    timeout: 30
+    timeout: 5
+    memorySize: 128
     role: Rule1Role
+    
+  athena-partitioner:
+    handler: athena.partitioner
+    timeout: 60
+    memorySize: 1024
+    role: AthenaPartitionerRole
+    environment:
+      DATABASE_NAME: ${self:custom.database-name}
+      TABLE_NAME: ${self:custom.table-name}
+    events:
+      - existingS3:
+          bucket: ${self:custom.delivery-bucket-name}
+          events:
+            - s3:ObjectCreated:*
 
 resources:
   Resources:
@@ -41,7 +61,7 @@ resources:
       Type: AWS::Config::DeliveryChannel
       Properties: 
         ConfigSnapshotDeliveryProperties: 
-          DeliveryFrequency: One_Hour
+          DeliveryFrequency: TwentyFour_Hours
         # Name: ${self:service}
         S3BucketName: !Ref ConfigDeliveryBucket
         SnsTopicARN: !Ref ConfigDeliveryTopic
@@ -143,6 +163,36 @@ resources:
         - arn:aws:iam::aws:policy/service-role/AWSConfigRulesExecutionRole
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
           
+    AthenaPartitionerRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: ${self:service}-athena-partitioner
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonAthenaFullAccess
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          - PolicyName: myPolicyName
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action: # Gives permission to S3
+                    - s3:PutObject
+                    - s3:ListBucket
+                    # - s3:GetBucketNotification
+                    # - s3:PutBucketNotification
+                  Resource: 
+                    - arn:aws:s3:::${self:custom.delivery-bucket-name}
+          
+    # To allow aws.config to call Rule1
     ConfigRule1Permission:
       DependsOn: ConfigRecorder
       Type: AWS::Lambda::Permission
@@ -150,6 +200,48 @@ resources:
         FunctionName: !GetAtt Rule1LambdaFunction.Arn
         Action: lambda:InvokeFunction
         Principal: config.amazonaws.com
+
+    AthenaDatabase:
+      Type: AWS::Glue::Database
+      Properties:
+        DatabaseInput:
+          Name: ${self:custom.database-name}
+          Description: Config snapshot database
+        CatalogId: !Ref AWS::AccountId
+      
+    AthenaTable:
+      Type: AWS::Glue::Table
+      Properties:
+        DatabaseName: !Ref AthenaDatabase
+        CatalogId: !Ref AWS::AccountId
+        TableInput:
+          Name: ${self:custom.table-name}
+          TableType: EXTERNAL_TABLE
+          PartitionKeys:
+          - Name: dt
+            Type: string
+          - Name: region
+            Type: string
+          StorageDescriptor:
+            Location:
+              Fn::Join:
+                - ''
+                -
+                  - 's3://'
+                  - !Ref ConfigDeliveryBucket
+                  - '/AWSLogs'
+            InputFormat: org.apache.hadoop.mapred.TextInputFormat
+            OutputFormat: org.apache.hadoop.hive.ql.io.IgnoreKeyTextOutputFormat
+            SerdeInfo:
+              SerializationLibrary: org.openx.data.jsonserde.JsonSerDe
+            Columns:
+              - Name: fileversion
+                Type: string
+              - Name: configSnapshotId
+                Type: string
+              - Name: configurationitems
+                Type: array<struct<configurationItemVersion:string,configurationItemCaptureTime:string,configurationStateId:bigint,awsAccountId:string,configurationItemStatus:string,resourceType:string,resourceId:string,resourceName:string,ARN:string,awsRegion:string,availabilityZone:string,configurationStateMd5Hash:string,configuration:string,supplementaryConfiguration:map<string,string>,tags:map<string,string>,resourceCreationTime:string>>
+
 #  Outputs:
 #     NewOutput:
 #       Description: "Description for the output"
