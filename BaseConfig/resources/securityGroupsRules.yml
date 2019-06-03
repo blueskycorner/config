@@ -1,0 +1,57 @@
+Resources:
+  IncomingSshDisabledConfigRule:
+    DependsOn: ConfigRecorder
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: ${self:provider.stage}-rules-check-incoming-ssh-disabled
+      Source:
+        Owner: AWS
+        SourceIdentifier: INCOMING_SSH_DISABLED
+      Description: 'CIS 4.1: Ensure no security groups allow ingress from 0.0.0.0/0 to port 22'
+      Scope:
+        ComplianceResourceTypes:
+        - AWS::EC2::SecurityGroup
+
+  ConfigRule1:
+    DependsOn: ConfigRule1Permission
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: ${self:provider.stage}-ConfigRule1
+      Source:
+        Owner: CUSTOM_LAMBDA
+        SourceDetails:
+        - EventSource: aws.config
+          MessageType: ConfigurationItemChangeNotification
+        - EventSource: aws.config
+          MessageType: OversizedConfigurationItemChangeNotification
+        SourceIdentifier: !GetAtt Rule1LambdaFunction.Arn
+      Description: 'Ensure security groups allow ingress to port 22 from 1.1.1.1/32'
+      InputParameters: '{"ipAddress":"1.1.1.1/32"}'
+      Scope:
+        ComplianceResourceTypes:
+        - AWS::EC2::SecurityGroup
+        
+  Rule1Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ${self:service}-rule1
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSConfigRulesExecutionRole
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        
+  # To allow aws.config to call Rule1
+  ConfigRule1Permission:
+    DependsOn: ConfigRecorder
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt Rule1LambdaFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: config.amazonaws.com

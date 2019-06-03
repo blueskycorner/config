@@ -1,0 +1,7 @@
+resources:
+  # Main configuration
+  - ${file(resources/configConfiguration.yml)}
+  # Security group rules
+  - ${file(resources/securityGroupsRules.yml)}
+  # Athena
+  - ${file(resources/athena.yml)}

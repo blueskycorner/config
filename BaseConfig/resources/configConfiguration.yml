@@ -1,0 +1,71 @@
+Resources:
+  ConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Properties: 
+      Name: default
+      RecordingGroup: 
+        ResourceTypes:
+        - AWS::EC2::SecurityGroup
+      RoleARN: !GetAtt ConfigRole.Arn
+
+  ConfigDeliveryChannel:
+    # DependsOn: ConfigRecorder
+    Type: AWS::Config::DeliveryChannel
+    Properties: 
+      ConfigSnapshotDeliveryProperties: 
+        DeliveryFrequency: TwentyFour_Hours
+      # Name: ${self:service}
+      S3BucketName: !Ref ConfigDeliveryBucket
+      SnsTopicARN: !Ref ConfigDeliveryTopic
+
+  ConfigDeliveryBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties: 
+      AccessControl: Private
+      BucketName: ${self:custom.delivery-bucket-name}
+
+  ConfigDeliveryTopic:
+    Type: AWS::SNS::Topic
+    Properties: 
+      DisplayName: ${self:service}
+      Subscription: 
+      - Endpoint: ${self:custom.delivery-topic-email}
+        Protocol: email
+      TopicName: ${self:service}
+
+  ConfigRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ${self:service}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - config.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSConfigRole
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action: s3:GetBucketAcl
+            Resource: !Join ['', ['arn:aws:s3:::', !Ref 'ConfigDeliveryBucket']]
+          - Effect: Allow
+            Action: s3:PutObject
+            Resource: !Join ['', ['arn:aws:s3:::', !Ref 'ConfigDeliveryBucket', /AWSLogs/,
+                !Ref 'AWS::AccountId', /*]]
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+          - Effect: Allow
+            Action: config:Put*
+            Resource: '*'
+          - Effect: Allow
+            Action: sns:Publish
+            Resource: !Ref ConfigDeliveryTopic
