@@ -114,6 +114,9 @@ resources:
             - Effect: Allow
               Action: config:Put*
               Resource: '*'
+            - Effect: Allow
+              Action: sns:Publish
+              Resource: !Ref ConfigDeliveryTopic
 
     IncomingSshDisabledConfigRule:
       DependsOn: ConfigRecorder
