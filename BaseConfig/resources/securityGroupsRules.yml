@@ -1,5 +1,5 @@
 Resources:
-  IncomingSshDisabledConfigRule:
+  RuleIncomingSshDisabledConfig:
     DependsOn: ConfigRecorder
     Type: AWS::Config::ConfigRule
     Properties:
@@ -12,8 +12,8 @@ Resources:
         ComplianceResourceTypes:
         - AWS::EC2::SecurityGroup
 
-  ConfigRule1:
-    DependsOn: ConfigRule1Permission
+  Rule1:
+    DependsOn: Rule1Permission
     Type: AWS::Config::ConfigRule
     Properties:
       ConfigRuleName: ${self:provider.stage}-ConfigRule1
@@ -48,7 +48,7 @@ Resources:
       - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         
   # To allow aws.config to call Rule1
-  ConfigRule1Permission:
+  Rule1Permission:
     DependsOn: ConfigRecorder
     Type: AWS::Lambda::Permission
     Properties:

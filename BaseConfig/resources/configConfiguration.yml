@@ -6,6 +6,7 @@ Resources:
       RecordingGroup: 
         ResourceTypes:
         - AWS::EC2::SecurityGroup
+        - AWS::EC2::Instance
       RoleARN: !GetAtt ConfigRole.Arn
 
   ConfigDeliveryChannel:
